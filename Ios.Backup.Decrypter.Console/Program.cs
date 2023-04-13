@@ -1,68 +1,88 @@
-﻿using System.Collections.Generic;
-using System.Globalization;
+﻿using System;
 using System.IO;
-using CsvHelper;
-using Ios.Backup.Decrypter.Console.Models;
-using Ios.Backup.Decrypter.Console.Repositories;
+using System.Runtime.InteropServices;
 using Ios.Backup.Decrypter.Library;
 
 namespace Ios.Backup.Decrypter.Console
 {
-    internal class Program
+    // Currently this is just a test harness to verify it works overall by extracting a single file.
+    internal static class Program
     {
-        private static bool _extractCSV = true;
-        
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
-            //Example: C:\\Users\\[username]\Apple\MobileSync\Backup\12348030-12004933163B902E
-            var backupDir = "";
-
-            //Password chosen in iTunes
-            var passPhrase = "";
-
-            var path = "Library/Safari/History.db";
-
-            using (var extractor = new IosBackupClient(backupDir, passPhrase))
+            //TODO: Create a more functional CLI once the rest of the code is cleaned up.
+            if (!ValidateParams(args))
             {
-                ExtractFile(extractor, path, "c:\\temp\\safari-history.db");
-                ExtractFile(extractor, IosPathsDbs.CALL_HISTORY, "c:\\temp\\call-history.db");
-                
-                extractor.ExtractFiles(IosPathsFiles.CAMERA_ROLL, "c:\\temp\\camera_roll");
+                PrintUsage();
+                return 1;
+            }
+
+            try
+            {
+                using var client = new IosBackupClient(args[0], args[1]);
+                client.ExtractFile(args[2], args[3]);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                System.Console.Error.WriteLine(ex.ToString());
+                return 2;
             }
         }
 
-        private static void ExtractFile(IosBackupClient client, string path, string outFileName)
+        static bool ValidateParams(string[] args)
         {
-            client.ExtractFile(path, outFileName);
-
-            if (_extractCSV)
+            if (args.Length != 4)
             {
-                IEnumerable<dynamic> data = null;
-                switch (path)
-                {
-                    case IosPathsDbs.SAFARI_HISTORY:
-                        data = DataRepository.FetchHistoryData(outFileName);
-                        break;
-                }
-
-                if (data != null)
-                {
-                    //TODO: support other files than db
-                    WriteToCsv(data, outFileName.Replace(".db", ".csv"));
-                }
+                return false;
             }
+
+            if (string.IsNullOrWhiteSpace(args[0]) || !Directory.Exists(args[0]))
+            {
+                System.Console.Error.WriteLine("The source backup path does not exist.");
+                return false;
+            }
+            
+            // Can't completely validate this arg, since we need to attempt decryption to know the password is right.
+            if (string.IsNullOrWhiteSpace(args[1]))
+            {
+                System.Console.Error.WriteLine("The password is required, and cannot be blank.");
+                return false;
+            }
+            
+            // Can't completely validate this arg, since we need to decrypt the manifest first.
+            if (string.IsNullOrWhiteSpace(args[2]))
+            {
+                System.Console.Error.WriteLine("The relative filename to extract is required, and cannot be blank.");
+                return false;
+            }
+            
+            if (string.IsNullOrWhiteSpace(args[3]) || !Directory.Exists(Path.GetDirectoryName(args[3])))
+            {
+                System.Console.Error.WriteLine("The output filename directory must already exist.");
+                return false;
+            }
+            
+            if (File.Exists(args[3]))
+            {
+                System.Console.Error.WriteLine("The output filename already exists.");
+                return false;
+            }
+
+            return true;
         }
 
-        private static void WriteToCsv(IEnumerable<dynamic> dataList, string replace)
+        static void PrintUsage()
         {
-            using (var writer = new StringWriter())
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
-                {
-                    csv.WriteRecords(dataList);
-                }
-
-                File.WriteAllText(replace, writer.ToString());
+                System.Console.WriteLine(
+                    $"Usage: Ios.Backup.Decrypter.Console.exe [BACKUP_PATH] [PASSWORD] [RELATIVE_SOURCE_FILENAME] [OUTPUT_FILENAME]");
+            }
+            else
+            {
+                System.Console.WriteLine(
+                    $"Usage: ./Ios.Backup.Decrypter.Console [BACKUP_PATH] [PASSWORD] [RELATIVE_SOURCE_FILENAME] [OUTPUT_FILENAME]");
             }
         }
     }
