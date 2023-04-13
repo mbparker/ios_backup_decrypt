@@ -7,6 +7,7 @@ using Ios.Backup.Extractor;
 
 namespace Ios.Backup.Decrypter.Library
 {
+    // TODO: Extract interface, and also inject deps properly.
     public class IosBackupClient : IDisposable
     {
         private readonly string _tempFilePath;
@@ -16,9 +17,10 @@ namespace Ios.Backup.Decrypter.Library
         private KeyBag _keybag;
         private bool _unlocked;
 
-        private string ManifestFile => _backupDir + "\\Manifest.plist";
-        private string ManifestDb => _backupDir + "\\Manifest.db";
+        private string ManifestFile => Path.Combine(_backupDir, "Manifest.plist");
+        private string ManifestDb => Path.Combine(_backupDir, "Manifest.db");
 
+        // TODO: Need better handling of the password. Once it becomes a string, it's there for all to see in memory.
         public IosBackupClient(string backupDir, string passPhrase)
         {
             _backupDir = backupDir;
@@ -37,60 +39,6 @@ namespace Ios.Backup.Decrypter.Library
         {
             var bytes = ExtractFileAsBytes(path);
             File.WriteAllBytes(outputFileName, bytes);
-        }
-
-        /// <summary>
-        /// Extracts files from folder, like pictures
-        /// </summary>
-        /// <param name="path">iOS path to file</param>
-        /// <param name="outputFileName">Path to save file</param>
-        public void ExtractFiles(string path, string outputFileName)
-        {
-            Init();
-
-            var files = _repository.GetFiles(path);
-
-            Directory.CreateDirectory(outputFileName);
-
-            foreach (var file in files)
-            {
-                var filename = Path.GetFileName(file.RelativePath);
-                var filePath = Path.Join(outputFileName, filename);
-                var decryptedData = ExtractFileAsBytes(file);
-
-                if (decryptedData != null)
-                {
-                    File.WriteAllBytes(filePath, decryptedData);
-                }
-            }
-
-            /*
-             *try:
-             cur = self._temp_manifest_db_conn.cursor()
-             query = """
-                 SELECT fileID, relativePath, file
-                 FROM Files
-                 WHERE relativePath LIKE ?
-                 ORDER BY domain, relativePath;
-             """
-             cur.execute(query, (relative_paths_like,))
-             results = cur.fetchall()
-         except sqlite3.Error:
-             return None
-         # Ensure output destination exists then loop through matches:
-         os.makedirs(output_folder, exist_ok=True)
-         for file_id, matched_relative_path, file_bplist in results:
-             filename = os.path.basename(matched_relative_path)
-             output_path = os.path.join(output_folder, filename)
-             # Decrypt the file:
-             decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
-             # Output to disk:
-             if decrypted_data is not None:
-                 with open(output_path, 'wb') as outfile:
-                     outfile.write(decrypted_data)
-             *
-             *
-             */
         }
 
         private void Init()
@@ -125,7 +73,7 @@ namespace Ios.Backup.Decrypter.Library
             var encryptedDb = File.ReadAllBytes(ManifestDb);
 
             var decryptedData = EncryptionHelper.DecryptAES(encryptedDb, key, CipherMode.CBC);
-            File.WriteAllBytes($"{_tempFilePath}\\Manifest.db", decryptedData);
+            File.WriteAllBytes(Path.Combine(_tempFilePath, "Manifest.db"), decryptedData);
 
 
             if (!_repository.OpenTempDb())
@@ -139,9 +87,7 @@ namespace Ios.Backup.Decrypter.Library
         private byte[] ExtractFileAsBytes(string path)
         {
             Init();
-
             var file = _repository.GetFile(path);
-
             return ExtractFileAsBytes(file);
         }
 
@@ -173,16 +119,16 @@ namespace Ios.Backup.Decrypter.Library
 
             var innerKey = _keybag.UnwrapKeyForClass(protectionClass.ToInt(), encryptionKey);
 
-            var fileNameInBackup = $"{_backupDir}\\{file.fileID[new Range(0, 2)]}\\{file.fileID}";
+            var fileNameInBackup = Path.Combine(_backupDir, file.fileID[new Range(0, 2)], file.fileID);
 
-            //TODO: async?
+            // TODO: Open a file stream and pass that to be decrypted
             var encryptedData = File.ReadAllBytes(fileNameInBackup);
 
             var decryptedData = EncryptionHelper.DecryptAES(encryptedData, innerKey, CipherMode.CBC);
 
             return RemovePadding(decryptedData);
         }
-
+        
         private byte[] RemovePadding(byte[] decryptedData, int blocksize = 16)
         {
             var n = decryptedData.Last();
@@ -206,7 +152,7 @@ namespace Ios.Backup.Decrypter.Library
 
         public void Dispose()
         {
-            if (!string.IsNullOrEmpty(_tempFilePath))
+            if (!string.IsNullOrWhiteSpace(_tempFilePath))
             {
                 Directory.Delete(_tempFilePath, true);
             }

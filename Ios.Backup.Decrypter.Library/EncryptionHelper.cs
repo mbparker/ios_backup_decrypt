@@ -8,6 +8,7 @@ namespace Ios.Backup.Decrypter.Library
 {
     public static class EncryptionHelper
     {
+        // TODO: Take in an input and output stream - don't load the whole source AND result files into memory!
         public static byte[] DecryptAES(byte[] cipher, byte[] key, CipherMode mode)
         {
             // Check arguments.
