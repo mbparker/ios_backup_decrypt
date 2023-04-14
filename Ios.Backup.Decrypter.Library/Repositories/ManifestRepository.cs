@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -8,16 +9,16 @@ namespace Ios.Backup.Extractor
 {
     public class ManifestRepository
     {
-        private readonly string _dbFilePath;
+        private readonly string dbFilename;
 
         public ManifestRepository(string dbFilePath)
         {
-            _dbFilePath = dbFilePath;
+            dbFilename = Path.Combine(dbFilePath, "Manifest.db");
         }
 
         public bool OpenTempDb()
         {
-            using (var conn = new SqliteConnection($"Data Source={_dbFilePath}\\Manifest.db"))
+            using (var conn = new SqliteConnection($"Data Source={dbFilename}"))
             {
                 var fileCount = conn.Query<int>("select count(*) from files").FirstOrDefault();
                 return fileCount > 0;
@@ -26,7 +27,7 @@ namespace Ios.Backup.Extractor
 
         public DBFile GetFile(string path)
         {
-            using (var conn = new SqliteConnection($"Data Source={_dbFilePath}\\Manifest.db"))
+            using (var conn = new SqliteConnection($"Data Source={dbFilename}"))
             {
                 var file = conn.Query<DBFile>(@"
                 SELECT fileID, file
@@ -40,7 +41,7 @@ namespace Ios.Backup.Extractor
 
         public IEnumerable<DBFile> GetFiles(string path)
         {
-            using (var conn = new SqliteConnection($"Data Source={_dbFilePath}\\Manifest.db"))
+            using (var conn = new SqliteConnection($"Data Source={dbFilename}"))
             {
                 var files = conn.Query<DBFile>(@"
                 SELECT fileID, relativePath, file
