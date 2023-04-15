@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using Claunia.PropertyList;
 using Ios.Backup.Extractor;
+using Microsoft.Data.Sqlite;
 
 namespace Ios.Backup.Decrypter.Library
 {
@@ -152,8 +153,9 @@ namespace Ios.Backup.Decrypter.Library
 
         public void Dispose()
         {
-            if (!string.IsNullOrWhiteSpace(_tempFilePath))
+            if (!string.IsNullOrWhiteSpace(_tempFilePath) && Directory.Exists(_tempFilePath))
             {
+                SqliteConnection.ClearAllPools();
                 Directory.Delete(_tempFilePath, true);
             }
         }

@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -20,8 +18,17 @@ namespace Ios.Backup.Extractor
         {
             using (var conn = new SqliteConnection($"Data Source={dbFilename}"))
             {
-                var fileCount = conn.Query<int>("select count(*) from files").FirstOrDefault();
-                return fileCount > 0;
+                conn.Open();
+                try
+                {
+                    var fileCount = conn.Query<int>("select count(*) from files").FirstOrDefault();
+                    return fileCount > 0;
+                }
+                finally
+                {
+                    SqliteConnection.ClearPool(conn);
+                    conn.Close();
+                }
             }
         }
 
@@ -29,26 +36,22 @@ namespace Ios.Backup.Extractor
         {
             using (var conn = new SqliteConnection($"Data Source={dbFilename}"))
             {
-                var file = conn.Query<DBFile>(@"
-                SELECT fileID, file
-                FROM Files
-                WHERE relativePath = @Path
-                ORDER BY domain, relativePath
-                LIMIT 1;", new {Path = path}).FirstOrDefault();
-                return file;
-            }
-        }
-
-        public IEnumerable<DBFile> GetFiles(string path)
-        {
-            using (var conn = new SqliteConnection($"Data Source={dbFilename}"))
-            {
-                var files = conn.Query<DBFile>(@"
-                SELECT fileID, relativePath, file
-                FROM Files
-                WHERE relativePath LIKE @Path
-                ORDER BY domain, relativePath;", new {Path = path});
-                return files;
+                conn.Open();
+                try
+                {
+                    var file = conn.Query<DBFile>(@"
+                    SELECT fileID, file
+                    FROM Files
+                    WHERE relativePath = @Path
+                    ORDER BY domain, relativePath
+                    LIMIT 1;", new { Path = path }).FirstOrDefault();
+                    return file;
+                }
+                finally
+                {
+                    SqliteConnection.ClearPool(conn);
+                    conn.Close();
+                }
             }
         }
     }
