@@ -59,7 +59,6 @@ namespace Ios.Backup.Extractor
     public class DBFile
     {
         public string fileID { get; set; }
-
         public byte[] file { get; set; }
 
         public string RelativePath { get; set; }
