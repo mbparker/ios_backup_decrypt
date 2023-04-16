@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Claunia.PropertyList;
 
-namespace Ios.Backup.Decrypter.Library
+namespace iOS.Backup.Decrypt.Library
 {
     public class KeyBag
     {

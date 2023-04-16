@@ -2,7 +2,7 @@
 using System.IO;
 using System.Security.Cryptography;
 
-namespace Ios.Backup.Decrypter.Library
+namespace iOS.Backup.Decrypt.Library
 {
     public static class EncryptionHelper
     {

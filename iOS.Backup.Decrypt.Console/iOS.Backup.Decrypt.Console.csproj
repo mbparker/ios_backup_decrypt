@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Ios.Backup.Decrypter.Library\Ios.Backup.Decrypter.Library.csproj" />
+    <ProjectReference Include="..\iOS.Backup.Decrypt.Library\iOS.Backup.Decrypt.Library.csproj" />
   </ItemGroup>
 
 </Project>

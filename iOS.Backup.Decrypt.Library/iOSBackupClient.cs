@@ -3,14 +3,14 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using Claunia.PropertyList;
-using Ios.Backup.Extractor;
+using iOS.Backup.Extractor;
 using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 
-namespace Ios.Backup.Decrypter.Library
+namespace iOS.Backup.Decrypt.Library
 {
     // TODO: Extract interface, and also inject deps properly.
-    public class IosBackupClient : IDisposable
+    public class iOSBackupClient : IDisposable
     {
         private readonly string workingCopyPath;
         private readonly ManifestRepository manifestRepository;
@@ -23,7 +23,7 @@ namespace Ios.Backup.Decrypter.Library
         private string ManifestDb => Path.Combine(sourceBackupPath, "Manifest.db");
 
         // TODO: Need better handling of the password. Once it becomes a string, it's there for all to see in memory.
-        public IosBackupClient(string sourceBackupPath, string sourceBackupPassword)
+        public iOSBackupClient(string sourceBackupPath, string sourceBackupPassword)
         {
             this.sourceBackupPath = sourceBackupPath;
             this.sourceBackupPassword = sourceBackupPassword;

@@ -1,9 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
-using Ios.Backup.Decrypter.Library;
+using iOS.Backup.Decrypt.Library;
 
-namespace Ios.Backup.Decrypter.Console
+namespace iOS.Backup.Decrypt.Console
 {
     // Currently this is just a test harness to verify it works overall by extracting a single file.
     internal static class Program
@@ -19,7 +19,7 @@ namespace Ios.Backup.Decrypter.Console
 
             try
             {
-                using var client = new IosBackupClient(args[0], args[1]);
+                using var client = new iOSBackupClient(args[0], args[1]);
                 //TODO: Make this a CLI option
                 var manifestJsonFilename = Path.Combine(Path.GetDirectoryName(args[3]), "manifest.json");
                 if (!File.Exists(manifestJsonFilename))
@@ -84,12 +84,12 @@ namespace Ios.Backup.Decrypter.Console
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 System.Console.WriteLine(
-                    $"Usage: Ios.Backup.Decrypter.Console.exe [BACKUP_PATH] [PASSWORD] [RELATIVE_SOURCE_FILENAME] [OUTPUT_FILENAME]");
+                    $"Usage: iOS.Backup.Decrypt.Console.exe [BACKUP_PATH] [PASSWORD] [RELATIVE_SOURCE_FILENAME] [OUTPUT_FILENAME]");
             }
             else
             {
                 System.Console.WriteLine(
-                    $"Usage: ./Ios.Backup.Decrypter.Console [BACKUP_PATH] [PASSWORD] [RELATIVE_SOURCE_FILENAME] [OUTPUT_FILENAME]");
+                    $"Usage: ./iOS.Backup.Decrypt.Console [BACKUP_PATH] [PASSWORD] [RELATIVE_SOURCE_FILENAME] [OUTPUT_FILENAME]");
             }
         }
     }
