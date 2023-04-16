@@ -16,8 +16,8 @@ namespace Ios.Backup.Decrypter.Library
         private int? Type { get; set; }
         private int? Wrap { get; set; }
         private byte[] UUID { get; set; }
-        private Dictionary<string, byte[]> Attr => new Dictionary<string, byte[]>();
-        private Dictionary<int, ClassKey> ClassKeys => new Dictionary<int, ClassKey>();
+        private Dictionary<string, byte[]> Attr { get; set; } = new Dictionary<string, byte[]>();
+        private Dictionary<int, ClassKey> ClassKeys { get; set; } = new Dictionary<int, ClassKey>();
 
         public KeyBag(NSData data)
         {
