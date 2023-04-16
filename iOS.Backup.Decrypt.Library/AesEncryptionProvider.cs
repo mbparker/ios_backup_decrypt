@@ -4,37 +4,46 @@ using System.Security.Cryptography;
 
 namespace iOS.Backup.Decrypt.Library
 {
-    public static class EncryptionHelper
+    public class AesEncryptionProvider
     {
-        public static byte[] DecryptAES(byte[] inputData, byte[] key, CipherMode mode)
+        public byte[] DecryptAes(byte[] inputData, byte[] key, CipherMode mode)
         {
+            if (inputData == null || inputData.Length == 0)
+                throw new ArgumentNullException(nameof(inputData));
+            
             using (var inputStream = new MemoryStream(inputData))
             {
                 using (var outputStream = new MemoryStream())
                 {
-                    DecryptAES(inputStream, key, mode, outputStream);
+                    DecryptAes(inputStream, key, mode, outputStream);
                     return outputStream.ToArray();
                 }
             }
         }
 
-        public static void DecryptAES(string inputFilename, byte[] key, CipherMode mode, string outputFilename)
+        public void DecryptAes(string inputFilename, byte[] key, CipherMode mode, string outputFilename)
         {
+            if (string.IsNullOrWhiteSpace(inputFilename))
+                throw new ArgumentNullException(nameof(inputFilename));
+            if (string.IsNullOrWhiteSpace(outputFilename))
+                throw new ArgumentNullException(nameof(outputFilename));
+            
             using (var inputStream = new FileStream(inputFilename, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 using (var outputStream =
                        new FileStream(outputFilename, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
                 {
-                    DecryptAES(inputStream, key, mode, outputStream);
+                    DecryptAes(inputStream, key, mode, outputStream);
                 }
             }            
         }
         
-        private static void DecryptAES(Stream inputStream, byte[] key, CipherMode mode, Stream outputStream)
+        private void DecryptAes(Stream inputStream, byte[] key, CipherMode mode, Stream outputStream)
         {
-            // Check arguments.
-            if (inputStream == null || inputStream.Length <= 0)
+            if (inputStream == null || inputStream.Length == 0)
                 throw new ArgumentNullException(nameof(inputStream));
+            if (key == null || key.Length <= 0)
+                throw new ArgumentNullException(nameof(key));            
             if (outputStream == null)
                 throw new ArgumentNullException(nameof(outputStream));
 

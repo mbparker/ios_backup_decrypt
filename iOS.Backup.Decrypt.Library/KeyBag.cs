@@ -10,7 +10,8 @@ namespace iOS.Backup.Decrypt.Library
     public class KeyBag
     {
         private const int WrapPassphrase = 2;
-        
+
+        private readonly AesEncryptionProvider aesEncryptionProvider;
         private readonly string[] tags = { nameof(ClassKey.WRAP), nameof(ClassKey.CLAS), nameof(ClassKey.KTYP), nameof(ClassKey.WPKY) };
         private readonly Dictionary<string, byte[]> attribs = new Dictionary<string, byte[]>();
         private readonly Dictionary<int, ClassKey> classKeys = new Dictionary<int, ClassKey>();        
@@ -21,6 +22,7 @@ namespace iOS.Backup.Decrypt.Library
 
         public KeyBag(NSData data)
         {
+            aesEncryptionProvider = new AesEncryptionProvider();
             ParseKeybag(data);
         }
 
@@ -110,7 +112,7 @@ namespace iOS.Backup.Decrypt.Library
 
                     var todec = first.Concat(second).ToArray();
 
-                    var b = EncryptionHelper.DecryptAES(todec, kek, CipherMode.ECB);
+                    var b = aesEncryptionProvider.DecryptAes(todec, kek, CipherMode.ECB);
 
                     a = Unpack64BitUnsignedInt(b.Take(8).ToArray());
                     r[i] = Unpack64BitUnsignedInt(b.Skip(8).ToArray());

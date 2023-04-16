@@ -4,7 +4,7 @@ using System.Linq;
 using Dapper;
 using Microsoft.Data.Sqlite;
 
-namespace iOS.Backup.Extractor
+namespace iOS.Backup.Decrypt.Library.Repositories
 {
     public class ManifestRepository
     {

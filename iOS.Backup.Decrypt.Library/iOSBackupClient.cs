@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using Claunia.PropertyList;
-using iOS.Backup.Extractor;
+using iOS.Backup.Decrypt.Library.Repositories;
 using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 
@@ -13,6 +13,7 @@ namespace iOS.Backup.Decrypt.Library
     public class iOSBackupClient : IDisposable
     {
         private readonly string workingCopyPath;
+        private readonly AesEncryptionProvider aesEncryptionProvider;
         private readonly ManifestRepository manifestRepository;
         private readonly string sourceBackupPath;
         private readonly string sourceBackupPassword;
@@ -29,6 +30,7 @@ namespace iOS.Backup.Decrypt.Library
             this.sourceBackupPassword = sourceBackupPassword;
             workingCopyPath = GetTemporaryDirectory();
             manifestRepository = new ManifestRepository(workingCopyPath);
+            aesEncryptionProvider = new AesEncryptionProvider();
 
         }
         
@@ -85,7 +87,7 @@ namespace iOS.Backup.Decrypt.Library
 
             var fileNameInBackup = Path.Combine(sourceBackupPath, file.fileID[new Range(0, 2)], file.fileID);
             
-            EncryptionHelper.DecryptAES(fileNameInBackup, innerKey, CipherMode.CBC, outputFilename);
+            aesEncryptionProvider.DecryptAes(fileNameInBackup, innerKey, CipherMode.CBC, outputFilename);
         }
 
         private string GetTemporaryDirectory()
@@ -133,7 +135,7 @@ namespace iOS.Backup.Decrypt.Library
             
             var key = keybag.UnwrapKeyForClass(manifestClass, manifestKey);
             
-            EncryptionHelper.DecryptAES(ManifestDb, key, CipherMode.CBC, Path.Combine(workingCopyPath, "Manifest.db"));
+            aesEncryptionProvider.DecryptAes(ManifestDb, key, CipherMode.CBC, Path.Combine(workingCopyPath, "Manifest.db"));
 
             if (!manifestRepository.OpenTempDb())
             {
