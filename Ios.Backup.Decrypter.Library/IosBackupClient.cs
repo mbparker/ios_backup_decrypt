@@ -43,14 +43,14 @@ namespace Ios.Backup.Decrypter.Library
         
         public void ExtractFile(string path, string outputFileName)
         {
-            InitIfNeeded();
+            EnsureInitialized();
             var file = manifestRepository.GetFile(path);
             ExtractAndDecryptFile(file, outputFileName);
         }
 
         public void ExtractManifestFileInfoToJson(string outputFileName)
         {
-            InitIfNeeded();
+            EnsureInitialized();
             var files = manifestRepository.GetAllFiles().ToArray();
             File.WriteAllText(outputFileName, JsonConvert.SerializeObject(files, Formatting.Indented));
         }
@@ -97,17 +97,22 @@ namespace Ios.Backup.Decrypter.Library
             return tempFolder;
         }
 
-        private void InitIfNeeded()
+        private void EnsureInitialized()
         {
             if (!initialized)
             {
-                Init();
+                PerformInitialize();
                 initialized = true;
             }
         }
 
-        private void Init()
+        private void PerformInitialize()
         {
+            if (initialized)
+            {
+                throw new InvalidOperationException($"Already initialized. Call {nameof(EnsureInitialized)} instead of {nameof(PerformInitialize)}");
+            }
+            
             FileInfo file = new FileInfo(ManifestFile);
             NSDictionary rootDict = (NSDictionary)PropertyListParser.Parse(file);
 

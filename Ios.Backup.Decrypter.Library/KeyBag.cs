@@ -28,14 +28,14 @@ namespace Ios.Backup.Decrypter.Library
         {
             byte[] bytes;
 
-            using (var deriveBytes = new Rfc2898DeriveBytes(passPhrase, attribs["DPSL"], GetInt(attribs["DPIC"]), HashAlgorithmName.SHA256))
+            using (var deriveBytes = new Rfc2898DeriveBytes(passPhrase, attribs["DPSL"], Unpack32BitSignedInt(attribs["DPIC"]), HashAlgorithmName.SHA256))
             {
                 bytes = deriveBytes.GetBytes(32);
             }
 
             var passphrase_round1 = bytes;
 
-            using (var deriveBytes = new Rfc2898DeriveBytes(passphrase_round1, attribs["SALT"], GetInt(attribs["ITER"]), HashAlgorithmName.SHA1))
+            using (var deriveBytes = new Rfc2898DeriveBytes(passphrase_round1, attribs["SALT"], Unpack32BitSignedInt(attribs["ITER"]), HashAlgorithmName.SHA1))
             {
                 bytes = deriveBytes.GetBytes(32);
             }
@@ -64,6 +64,23 @@ namespace Ios.Backup.Decrypter.Library
 
             return true;
         }
+        
+        public byte[] UnwrapKeyForClass(int manifestClass, byte[] manifestKey)
+        {
+            var ck = classKeys[manifestClass].Key;
+
+            if (ck == null)
+            {
+                throw new Exception("Key not found, did you provide the correct pass phrase?");
+            }
+
+            if (manifestKey.Length != 0x28)
+            {
+                throw new Exception("Invalid key length");
+            }
+
+            return AESUnwrap(ck, manifestKey);
+        }        
 
         private byte[] AESUnwrap(byte[] kek, byte[] wrapped)
         {
@@ -72,7 +89,7 @@ namespace Ios.Backup.Decrypter.Library
 
             foreach (var i in test)
             {
-                C.Add(Unpack64Bit(wrapped[new Range(i * 8, i * 8 + 8)]));
+                C.Add(Unpack64BitUnsignedInt(wrapped[new Range(i * 8, i * 8 + 8)]));
             }
 
             var n = C.Count - 1;
@@ -88,15 +105,15 @@ namespace Ios.Backup.Decrypter.Library
             {
                 foreach (int i in Enumerable.Range(1, n).Reverse())
                 {
-                    var first = Pack64Bit(a ^ (ulong)(n * j + i));
-                    var second = Pack64Bit(r[i]);
+                    var first = Pack64BitUnsignedInt(a ^ (ulong)(n * j + i));
+                    var second = Pack64BitUnsignedInt(r[i]);
 
                     var todec = first.Concat(second).ToArray();
 
                     var b = EncryptionHelper.DecryptAES(todec, kek, CipherMode.ECB);
 
-                    a = Unpack64Bit(b.Take(8).ToArray());
-                    r[i] = Unpack64Bit(b.Skip(8).ToArray());
+                    a = Unpack64BitUnsignedInt(b.Take(8).ToArray());
+                    r[i] = Unpack64BitUnsignedInt(b.Skip(8).ToArray());
                 }
             }
 
@@ -105,18 +122,8 @@ namespace Ios.Backup.Decrypter.Library
                 return null;
             }
 
-            var res = r.Skip(1).Select(Pack64Bit).SelectMany(m => m).ToArray();
+            var res = r.Skip(1).Select(Pack64BitUnsignedInt).SelectMany(m => m).ToArray();
             return res;
-        }
-
-        private byte[] Pack64Bit(ulong l)
-        {
-            return BitConverter.GetBytes(l).Reverse().ToArray();
-        }
-
-        private ulong Unpack64Bit(byte[] bytes)
-        {
-            return BitConverter.ToUInt64(bytes.Reverse().ToArray());
         }
 
         private void ParseKeybag(NSData nsData)
@@ -130,7 +137,7 @@ namespace Ios.Backup.Decrypter.Library
 
                 if (data.Length == 4)
                 {
-                    dataAsInt = GetInt(data);
+                    dataAsInt = Unpack32BitSignedInt(data);
                 }
 
                 if (tag == "TYPE")
@@ -191,16 +198,6 @@ namespace Ios.Backup.Decrypter.Library
             }
         }
 
-        private class ClassKey
-        {
-            public int CLAS { get; set; }
-            public byte[] UUID { get; set; }
-            public int? WRAP { get; set; }
-            public int? KTYP { get; set; }
-            public byte[] WPKY { get; set; }
-            public byte[] Key { get; set; }
-        }
-
         private IEnumerable<(string, byte[])> LoopTLVBlocks(NSData nsData)
         {
             var blob = nsData.Bytes;
@@ -209,33 +206,36 @@ namespace Ios.Backup.Decrypter.Library
             while (i + 8 <= blob.Length)
             {
                 var tag = blob[new Range(i, i + 4)];
-                var length = GetInt(blob[new Range(i + 4, i + 8)]);
+                var length = Unpack32BitSignedInt(blob[new Range(i + 4, i + 8)]);
                 var data = blob[new Range(i + 8, i + 8 + length)];
                 yield return (Encoding.ASCII.GetString(tag), data);
                 i += 8 + length;
             }
         }
+        
+        private byte[] Pack64BitUnsignedInt(ulong l)
+        {
+            return BitConverter.GetBytes(l).Reverse().ToArray();
+        }
 
-        private static int GetInt(byte[] bytes)
+        private ulong Unpack64BitUnsignedInt(byte[] bytes)
+        {
+            return BitConverter.ToUInt64(bytes.Reverse().ToArray());
+        }
+        
+        private int Unpack32BitSignedInt(byte[] bytes)
         {
             return BitConverter.ToInt32(bytes.Reverse().ToArray());
         }
-
-        public byte[] UnwrapKeyForClass(int manifestClass, byte[] manifestKey)
+        
+        private class ClassKey
         {
-            var ck = classKeys[manifestClass].Key;
-
-            if (ck == null)
-            {
-                throw new Exception("Key not found, did you provide the correct pass phrase?");
-            }
-
-            if (manifestKey.Length != 0x28)
-            {
-                throw new Exception("Invalid key length");
-            }
-
-            return AESUnwrap(ck, manifestKey);
-        }
+            public int CLAS { get; set; }
+            public byte[] UUID { get; set; }
+            public int? WRAP { get; set; }
+            public int? KTYP { get; set; }
+            public byte[] WPKY { get; set; }
+            public byte[] Key { get; set; }
+        }        
     }
 }
