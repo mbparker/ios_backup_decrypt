@@ -47,23 +47,7 @@ namespace Ios.Backup.Decrypter.Library
             var file = manifestRepository.GetFile(path);
             ExtractAndDecryptFile(file, outputFileName);
         }
-        
-        public void ExtractFiles(string[] paths, string[] outputFilenames)
-        {
-            if (paths.Length != outputFilenames.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(outputFilenames));
-            }
 
-            InitIfNeeded();
-            var i = 0;
-            foreach (var path in paths)
-            {
-                var file = manifestRepository.GetFile(path);
-                ExtractAndDecryptFile(file, outputFilenames[i++]);
-            }
-        }        
-        
         public void ExtractManifestFileInfoToJson(string outputFileName)
         {
             InitIfNeeded();
@@ -101,14 +85,7 @@ namespace Ios.Backup.Decrypter.Library
 
             var fileNameInBackup = Path.Combine(sourceBackupPath, file.fileID[new Range(0, 2)], file.fileID);
             
-            using (var inputStream = new FileStream(fileNameInBackup, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                using (var outputStream =
-                       new FileStream(outputFilename, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
-                {
-                    EncryptionHelper.DecryptAES(inputStream, innerKey, CipherMode.CBC, outputStream);
-                }
-            }
+            EncryptionHelper.DecryptAES(fileNameInBackup, innerKey, CipherMode.CBC, outputFilename);
         }
 
         private string GetTemporaryDirectory()
@@ -151,15 +128,8 @@ namespace Ios.Backup.Decrypter.Library
             
             var key = keybag.UnwrapKeyForClass(manifestClass, manifestKey);
             
-            using (var inputStream = new FileStream(ManifestDb, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                using (var outputStream =
-                       new FileStream(Path.Combine(workingCopyPath, "Manifest.db"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
-                {
-                    EncryptionHelper.DecryptAES(inputStream, key, CipherMode.CBC, outputStream);
-                }
-            }
-            
+            EncryptionHelper.DecryptAES(ManifestDb, key, CipherMode.CBC, Path.Combine(workingCopyPath, "Manifest.db"));
+
             if (!manifestRepository.OpenTempDb())
             {
                 throw new Exception("Manifest.db file does not seem to be the right format!");

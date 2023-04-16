@@ -17,8 +17,20 @@ namespace Ios.Backup.Decrypter.Library
                 }
             }
         }
+
+        public static void DecryptAES(string inputFilename, byte[] key, CipherMode mode, string outputFilename)
+        {
+            using (var inputStream = new FileStream(inputFilename, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (var outputStream =
+                       new FileStream(outputFilename, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+                {
+                    DecryptAES(inputStream, key, mode, outputStream);
+                }
+            }            
+        }
         
-        public static void DecryptAES(Stream inputStream, byte[] key, CipherMode mode, Stream outputStream)
+        private static void DecryptAES(Stream inputStream, byte[] key, CipherMode mode, Stream outputStream)
         {
             // Check arguments.
             if (inputStream == null || inputStream.Length <= 0)
