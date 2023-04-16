@@ -9,18 +9,19 @@ namespace Ios.Backup.Decrypter.Library
 {
     public class KeyBag
     {
-        private string[] _tags = new[] { nameof(ClassKey.WRAP), nameof(ClassKey.CLAS), nameof(ClassKey.KTYP), nameof(ClassKey.WPKY) };
+        private const int WrapPassphrase = 2;
+        
+        private readonly string[] tags = { nameof(ClassKey.WRAP), nameof(ClassKey.CLAS), nameof(ClassKey.KTYP), nameof(ClassKey.WPKY) };
+        
         private int? Type { get; set; }
         private int? Wrap { get; set; }
         private byte[] UUID { get; set; }
-        private Dictionary<string, byte[]> Attr { get; set; } = new Dictionary<string, byte[]>();
-        private Dictionary<int, ClassKey> ClassKeys { get; set; } = new Dictionary<int, ClassKey>();
-
-        private int _WRAP_PASSPHRASE = 2;
+        private Dictionary<string, byte[]> Attr => new Dictionary<string, byte[]>();
+        private Dictionary<int, ClassKey> ClassKeys => new Dictionary<int, ClassKey>();
 
         public KeyBag(NSData data)
         {
-            Parsekeybag(data);
+            ParseKeybag(data);
         }
 
         public bool UnlockWithPassphrase(string passPhrase)
@@ -48,7 +49,7 @@ namespace Ios.Backup.Decrypter.Library
                     continue;
                 }
 
-                if (classKey.Value.WRAP == _WRAP_PASSPHRASE)
+                if (classKey.Value.WRAP == WrapPassphrase)
                 {
                     var k = AESUnwrap(passphrase_key, classKey.Value.WPKY);
 
@@ -87,8 +88,8 @@ namespace Ios.Backup.Decrypter.Library
             {
                 foreach (int i in Enumerable.Range(1, n).Reverse())
                 {
-                    var first = Pack64Bit(a ^ (ulong)(n * j + i)).Reverse();
-                    var second = Pack64Bit(r[i]).Reverse();
+                    var first = Pack64Bit(a ^ (ulong)(n * j + i));
+                    var second = Pack64Bit(r[i]);
 
                     var todec = first.Concat(second).ToArray();
 
@@ -104,21 +105,21 @@ namespace Ios.Backup.Decrypter.Library
                 return null;
             }
 
-            var res = r.Skip(1).Select(Pack64Bit).SelectMany(m => m.Reverse()).ToArray();
+            var res = r.Skip(1).Select(Pack64Bit).SelectMany(m => m).ToArray();
             return res;
         }
 
         private byte[] Pack64Bit(ulong l)
         {
-            return StructConverter.Pack(new object[] { l });
+            return BitConverter.GetBytes(l).Reverse().ToArray();
         }
 
         private ulong Unpack64Bit(byte[] bytes)
         {
-            return (ulong)StructConverter.Unpack(">Q", bytes.Reverse().ToArray())[0];
+            return BitConverter.ToUInt64(bytes.Reverse().ToArray());
         }
 
-        private void Parsekeybag(NSData nsData)
+        private void ParseKeybag(NSData nsData)
         {
 
             ClassKey currentClassKey = null;
@@ -158,7 +159,7 @@ namespace Ios.Backup.Decrypter.Library
 
                     currentClassKey = new ClassKey { UUID = data };
                 }
-                else if (_tags.Contains(tag) && currentClassKey != null)
+                else if (tags.Contains(tag) && currentClassKey != null)
                 {
                     if (tag == nameof(ClassKey.CLAS))
                     {
@@ -217,7 +218,7 @@ namespace Ios.Backup.Decrypter.Library
 
         private static int GetInt(byte[] bytes)
         {
-            return (int)(uint)StructConverter.Unpack(">L", bytes.Reverse().ToArray())[0];
+            return BitConverter.ToInt32(bytes.Reverse().ToArray());
         }
 
         public byte[] UnwrapKeyForClass(int manifestClass, byte[] manifestKey)

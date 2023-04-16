@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -54,14 +55,35 @@ namespace Ios.Backup.Extractor
                 }
             }
         }
+        
+        public IEnumerable<DBFile> GetAllFiles()
+        {
+            using (var conn = new SqliteConnection($"Data Source={dbFilename}"))
+            {
+                conn.Open();
+                try
+                {
+                    var files = conn.Query<DBFile>(@"
+                    SELECT fileID, domain, relativePath
+                    FROM Files
+                    ORDER BY domain, relativePath");
+                    return files;
+                }
+                finally
+                {
+                    SqliteConnection.ClearPool(conn);
+                    conn.Close();
+                }
+            }
+        }
     }
 
     public class DBFile
     {
         public string fileID { get; set; }
-        public byte[] file { get; set; }
-
+        public string domain { get; set; }
         public string RelativePath { get; set; }
+        public byte[] file { get; set; }
     }
 
 }

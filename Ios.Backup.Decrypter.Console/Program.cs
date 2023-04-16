@@ -20,6 +20,8 @@ namespace Ios.Backup.Decrypter.Console
             try
             {
                 using var client = new IosBackupClient(args[0], args[1]);
+                //TODO: Make this a CLI option
+                //client.ExtractManifestFileInfoToJson(Path.Combine(Path.GetDirectoryName(args[3]), "manifest.json"));
                 client.ExtractFile(args[2], args[3]);
                 return 0;
             }

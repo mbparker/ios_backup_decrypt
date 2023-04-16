@@ -1,31 +1,30 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Security.Cryptography;
 
 namespace Ios.Backup.Decrypter.Library
 {
     public static class EncryptionHelper
     {
-        // TODO: Take in an input and output stream - don't load the whole source AND result files into memory!
-        public static byte[] DecryptAES(byte[] cipher, byte[] key, CipherMode mode)
+        public static byte[] DecryptAES(byte[] inputData, byte[] key, CipherMode mode)
         {
-            // Check arguments.
-            if (cipher == null || cipher.Length <= 0)
-                throw new ArgumentNullException(nameof(cipher));
-
-            if (mode == CipherMode.CBC)
+            using (var inputStream = new MemoryStream(inputData))
             {
-                if (cipher.Length % 16 != 0)
+                using (var outputStream = new MemoryStream())
                 {
-                    Debug.Write("WARN: AESdecryptCBC: data length not /16, truncating");
-                    var truncatedEnd = (cipher.Length / 16) * 16;
-                    cipher = cipher[new Range(0, truncatedEnd)];
+                    DecryptAES(inputStream, key, mode, outputStream);
+                    return outputStream.ToArray();
                 }
             }
-
-            byte[] decrypted;
+        }
+        
+        public static void DecryptAES(Stream inputStream, byte[] key, CipherMode mode, Stream outputStream)
+        {
+            // Check arguments.
+            if (inputStream == null || inputStream.Length <= 0)
+                throw new ArgumentNullException(nameof(inputStream));
+            if (outputStream == null)
+                throw new ArgumentNullException(nameof(outputStream));
 
             using (RijndaelManaged rijAlg = new RijndaelManaged())
             {
@@ -38,23 +37,14 @@ namespace Ios.Backup.Decrypter.Library
                 rijAlg.IV = m_IV;
                 rijAlg.Padding = PaddingMode.Zeros;
 
-                using (ICryptoTransform decryptor = rijAlg.CreateDecryptor(rijAlg.Key, rijAlg.IV))
+                using (ICryptoTransform decryptor = rijAlg.CreateDecryptor())
                 {
-                    using (MemoryStream ms = new MemoryStream(cipher))
+                    using (var cryptoStream = new CryptoStream(inputStream, decryptor, CryptoStreamMode.Read))
                     {
-                        using (var cryptoStream = new CryptoStream(ms, decryptor, CryptoStreamMode.Read))
-                        {
-                            decrypted = new byte[cipher.Length];
-                            var bytesRead = cryptoStream.Read(decrypted, 0, cipher.Length);
-
-                            decrypted = decrypted.Take(bytesRead).ToArray();
-                        }
+                        cryptoStream.CopyTo(outputStream);
                     }
                 }
             }
-
-            return decrypted;
         }
-
     }
 }

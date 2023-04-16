@@ -5,94 +5,73 @@ using System.Security.Cryptography;
 using Claunia.PropertyList;
 using Ios.Backup.Extractor;
 using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
 
 namespace Ios.Backup.Decrypter.Library
 {
     // TODO: Extract interface, and also inject deps properly.
     public class IosBackupClient : IDisposable
     {
-        private readonly string _tempFilePath;
-        private readonly ManifestRepository _repository;
-        private readonly string _backupDir;
-        private readonly string _passPhrase;
-        private KeyBag _keybag;
-        private bool _unlocked;
+        private readonly string workingCopyPath;
+        private readonly ManifestRepository manifestRepository;
+        private readonly string sourceBackupPath;
+        private readonly string sourceBackupPassword;
+        private KeyBag keybag;
+        private bool initialized;
 
-        private string ManifestFile => Path.Combine(_backupDir, "Manifest.plist");
-        private string ManifestDb => Path.Combine(_backupDir, "Manifest.db");
+        private string ManifestFile => Path.Combine(sourceBackupPath, "Manifest.plist");
+        private string ManifestDb => Path.Combine(sourceBackupPath, "Manifest.db");
 
         // TODO: Need better handling of the password. Once it becomes a string, it's there for all to see in memory.
-        public IosBackupClient(string backupDir, string passPhrase)
+        public IosBackupClient(string sourceBackupPath, string sourceBackupPassword)
         {
-            _backupDir = backupDir;
-            _passPhrase = passPhrase;
-            _tempFilePath = GetTemporaryDirectory();
-            _repository = new ManifestRepository(_tempFilePath);
+            this.sourceBackupPath = sourceBackupPath;
+            this.sourceBackupPassword = sourceBackupPassword;
+            workingCopyPath = GetTemporaryDirectory();
+            manifestRepository = new ManifestRepository(workingCopyPath);
 
         }
-
-        /// <summary>
-        /// Extracts a file like a sqlite db
-        /// </summary>
-        /// <param name="path">iOS path to file</param>
-        /// <param name="outputFileName">Path to save file</param>
+        
+        public void Dispose()
+        {
+            if (!string.IsNullOrWhiteSpace(workingCopyPath) && Directory.Exists(workingCopyPath))
+            {
+                SqliteConnection.ClearAllPools();
+                Directory.Delete(workingCopyPath, true);
+            }
+        }        
+        
         public void ExtractFile(string path, string outputFileName)
         {
-            var bytes = ExtractFileAsBytes(path);
-            File.WriteAllBytes(outputFileName, bytes);
+            InitIfNeeded();
+            var file = manifestRepository.GetFile(path);
+            ExtractAndDecryptFile(file, outputFileName);
         }
-
-        private void Init()
+        
+        public void ExtractFiles(string[] paths, string[] outputFilenames)
         {
-            if (_unlocked)
+            if (paths.Length != outputFilenames.Length)
             {
-                return;
+                throw new ArgumentOutOfRangeException(nameof(outputFilenames));
             }
 
-            FileInfo file = new FileInfo(ManifestFile);
-            NSDictionary rootDict = (NSDictionary)PropertyListParser.Parse(file);
-
-            NSData backupKeyBag = (NSData)rootDict.ObjectForKey("BackupKeyBag");
-            _keybag = new KeyBag(backupKeyBag);
-
-            NSData manifestKeyObject = (NSData)rootDict.ObjectForKey("ManifestKey");
-
-            if (manifestKeyObject == null)
+            InitIfNeeded();
+            var i = 0;
+            foreach (var path in paths)
             {
-                throw new Exception("Could not find ManifestKey. Is this an encrypted backup?");
+                var file = manifestRepository.GetFile(path);
+                ExtractAndDecryptFile(file, outputFilenames[i++]);
             }
-
-            var manifestKey = manifestKeyObject.Bytes.Skip(4).ToArray();
-            var manifestClass = (int)StructConverter.Unpack("<l", manifestKeyObject.Bytes.Take(4).ToArray())[0];
-
-            _keybag.UnlockWithPassphrase(_passPhrase);
-
-
-            var key = _keybag.UnwrapKeyForClass(manifestClass, manifestKey);
-
-
-            var encryptedDb = File.ReadAllBytes(ManifestDb);
-
-            var decryptedData = EncryptionHelper.DecryptAES(encryptedDb, key, CipherMode.CBC);
-            File.WriteAllBytes(Path.Combine(_tempFilePath, "Manifest.db"), decryptedData);
-
-
-            if (!_repository.OpenTempDb())
-            {
-                throw new Exception("Manifest.db file does not seem to be the right format!");
-            }
-
-            _unlocked = true;
-        }
-
-        private byte[] ExtractFileAsBytes(string path)
+        }        
+        
+        public void ExtractManifestFileInfoToJson(string outputFileName)
         {
-            Init();
-            var file = _repository.GetFile(path);
-            return ExtractFileAsBytes(file);
+            InitIfNeeded();
+            var files = manifestRepository.GetAllFiles().ToArray();
+            File.WriteAllText(outputFileName, JsonConvert.SerializeObject(files, Formatting.Indented));
         }
 
-        private byte[] ExtractFileAsBytes(DBFile file)
+        private void ExtractAndDecryptFile(DBFile file, string outputFilename)
         {
             var plist = (NSDictionary) PropertyListParser.Parse(file.file);
             var objects = (NSArray) plist.Get("$objects");
@@ -107,7 +86,7 @@ namespace Ios.Backup.Decrypter.Library
 
             if (!fileData.ContainsKey("EncryptionKey"))
             {
-                return null; //This file is not encrypted; either a directory or empty.
+                return; //This file is not encrypted; either a directory or empty.
             }
 
             var keyId = (UID) fileData["EncryptionKey"];
@@ -118,28 +97,18 @@ namespace Ios.Backup.Decrypter.Library
 
             var encryptionKey = encryptionKeyData.Bytes.Skip(4).ToArray();
 
-            var innerKey = _keybag.UnwrapKeyForClass(protectionClass.ToInt(), encryptionKey);
+            var innerKey = keybag.UnwrapKeyForClass(protectionClass.ToInt(), encryptionKey);
 
-            var fileNameInBackup = Path.Combine(_backupDir, file.fileID[new Range(0, 2)], file.fileID);
-
-            // TODO: Open a file stream and pass that to be decrypted
-            var encryptedData = File.ReadAllBytes(fileNameInBackup);
-
-            var decryptedData = EncryptionHelper.DecryptAES(encryptedData, innerKey, CipherMode.CBC);
-
-            return RemovePadding(decryptedData);
-        }
-        
-        private byte[] RemovePadding(byte[] decryptedData, int blocksize = 16)
-        {
-            var n = decryptedData.Last();
-
-            if (n > blocksize || n > decryptedData.Length)
+            var fileNameInBackup = Path.Combine(sourceBackupPath, file.fileID[new Range(0, 2)], file.fileID);
+            
+            using (var inputStream = new FileStream(fileNameInBackup, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                throw new Exception("Invalid CBC padding");
+                using (var outputStream =
+                       new FileStream(outputFilename, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+                {
+                    EncryptionHelper.DecryptAES(inputStream, innerKey, CipherMode.CBC, outputStream);
+                }
             }
-
-            return decryptedData[new Range(0, decryptedData.Length - n)];
         }
 
         private string GetTemporaryDirectory()
@@ -151,13 +120,50 @@ namespace Ios.Backup.Decrypter.Library
             return tempFolder;
         }
 
-        public void Dispose()
+        private void InitIfNeeded()
         {
-            if (!string.IsNullOrWhiteSpace(_tempFilePath) && Directory.Exists(_tempFilePath))
+            if (!initialized)
             {
-                SqliteConnection.ClearAllPools();
-                Directory.Delete(_tempFilePath, true);
+                Init();
+                initialized = true;
             }
         }
+
+        private void Init()
+        {
+            FileInfo file = new FileInfo(ManifestFile);
+            NSDictionary rootDict = (NSDictionary)PropertyListParser.Parse(file);
+
+            NSData backupKeyBag = (NSData)rootDict.ObjectForKey("BackupKeyBag");
+            keybag = new KeyBag(backupKeyBag);
+
+            NSData manifestKeyObject = (NSData)rootDict.ObjectForKey("ManifestKey");
+
+            if (manifestKeyObject == null)
+            {
+                throw new Exception("Could not find ManifestKey. Is this an encrypted backup?");
+            }
+
+            var manifestKey = manifestKeyObject.Bytes.Skip(4).ToArray();
+            var manifestClass = BitConverter.ToInt32(manifestKeyObject.Bytes.Take(4).ToArray());
+
+            keybag.UnlockWithPassphrase(sourceBackupPassword);
+            
+            var key = keybag.UnwrapKeyForClass(manifestClass, manifestKey);
+            
+            using (var inputStream = new FileStream(ManifestDb, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (var outputStream =
+                       new FileStream(Path.Combine(workingCopyPath, "Manifest.db"), FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+                {
+                    EncryptionHelper.DecryptAES(inputStream, key, CipherMode.CBC, outputStream);
+                }
+            }
+            
+            if (!manifestRepository.OpenTempDb())
+            {
+                throw new Exception("Manifest.db file does not seem to be the right format!");
+            }
+        }        
     }
 }
