@@ -12,12 +12,12 @@ namespace Ios.Backup.Decrypter.Library
         private const int WrapPassphrase = 2;
         
         private readonly string[] tags = { nameof(ClassKey.WRAP), nameof(ClassKey.CLAS), nameof(ClassKey.KTYP), nameof(ClassKey.WPKY) };
+        private readonly Dictionary<string, byte[]> attribs = new Dictionary<string, byte[]>();
+        private readonly Dictionary<int, ClassKey> classKeys = new Dictionary<int, ClassKey>();        
         
         private int? Type { get; set; }
         private int? Wrap { get; set; }
         private byte[] UUID { get; set; }
-        private Dictionary<string, byte[]> Attr { get; set; } = new Dictionary<string, byte[]>();
-        private Dictionary<int, ClassKey> ClassKeys { get; set; } = new Dictionary<int, ClassKey>();
 
         public KeyBag(NSData data)
         {
@@ -28,21 +28,21 @@ namespace Ios.Backup.Decrypter.Library
         {
             byte[] bytes;
 
-            using (var deriveBytes = new Rfc2898DeriveBytes(passPhrase, Attr["DPSL"], GetInt(Attr["DPIC"]), HashAlgorithmName.SHA256))
+            using (var deriveBytes = new Rfc2898DeriveBytes(passPhrase, attribs["DPSL"], GetInt(attribs["DPIC"]), HashAlgorithmName.SHA256))
             {
                 bytes = deriveBytes.GetBytes(32);
             }
 
             var passphrase_round1 = bytes;
 
-            using (var deriveBytes = new Rfc2898DeriveBytes(passphrase_round1, Attr["SALT"], GetInt(Attr["ITER"]), HashAlgorithmName.SHA1))
+            using (var deriveBytes = new Rfc2898DeriveBytes(passphrase_round1, attribs["SALT"], GetInt(attribs["ITER"]), HashAlgorithmName.SHA1))
             {
                 bytes = deriveBytes.GetBytes(32);
             }
 
             var passphrase_key = bytes;
 
-            foreach (var classKey in ClassKeys)
+            foreach (var classKey in classKeys)
             {
                 if (classKey.Value.WPKY == null)
                 {
@@ -154,7 +154,7 @@ namespace Ios.Backup.Decrypter.Library
                 {
                     if (currentClassKey != null)
                     {
-                        ClassKeys.Add(currentClassKey.CLAS, currentClassKey);
+                        classKeys.Add(currentClassKey.CLAS, currentClassKey);
                     }
 
                     currentClassKey = new ClassKey { UUID = data };
@@ -181,13 +181,13 @@ namespace Ios.Backup.Decrypter.Library
                 }
                 else
                 {
-                    Attr.Add(tag, data);
+                    attribs.Add(tag, data);
                 }
             }
 
             if (currentClassKey != null)
             {
-                ClassKeys.Add(currentClassKey.CLAS, currentClassKey);
+                classKeys.Add(currentClassKey.CLAS, currentClassKey);
             }
         }
 
@@ -223,7 +223,7 @@ namespace Ios.Backup.Decrypter.Library
 
         public byte[] UnwrapKeyForClass(int manifestClass, byte[] manifestKey)
         {
-            var ck = ClassKeys[manifestClass].Key;
+            var ck = classKeys[manifestClass].Key;
 
             if (ck == null)
             {
