@@ -75,18 +75,18 @@ namespace iOS.Backup.Decrypt.Library
                 if (mode == CipherMode.CBC)
                 {
                     // Manually remove pkcs7 padding!
-                    ValidateAndRemovePadding(outputStream);
+                    ValidateAndRemovePkcs7Padding(outputStream);
                 }                
             }
         }
 
-        private void ValidateAndRemovePadding(Stream outputStream)
+        private void ValidateAndRemovePkcs7Padding(Stream outputStream)
         {
             if (outputStream.Length > 1)
             {
                 outputStream.Position = outputStream.Length - 1;
                 var padLength = outputStream.ReadByte();
-                if (padLength > 0 && padLength <= 16)
+                if (padLength > 0 && padLength <= 16 && padLength < outputStream.Length)
                 {
                     outputStream.Position = outputStream.Length - padLength;
                     var padBytes = new byte[padLength];
