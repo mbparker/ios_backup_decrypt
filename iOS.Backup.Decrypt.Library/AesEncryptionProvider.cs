@@ -38,10 +38,15 @@ namespace iOS.Backup.Decrypt.Library
             }            
         }
         
+        // If CBC mode:
+        // The file on the device was already padded out using pkcs7.
+        // We need to manually validate and remove the padding after decryption.
         private void DecryptAes(Stream inputStream, byte[] key, CipherMode mode, Stream outputStream)
         {
             if (inputStream == null || inputStream.Length == 0)
                 throw new ArgumentNullException(nameof(inputStream));
+            if (mode == CipherMode.CBC && inputStream.Length % 16 != 0)
+                throw new ArgumentOutOfRangeException(nameof(inputStream));
             if (key == null || key.Length <= 0)
                 throw new ArgumentNullException(nameof(key));            
             if (outputStream == null)
@@ -56,16 +61,52 @@ namespace iOS.Backup.Decrypt.Library
                 rijAlg.Key = key;
                 rijAlg.BlockSize = m_IV.Length * 8;
                 rijAlg.IV = m_IV;
-                rijAlg.Padding = PaddingMode.Zeros;
+                // Manually remove pkcs7 padding!
+                rijAlg.Padding = PaddingMode.None; 
 
-                using (ICryptoTransform decryptor = rijAlg.CreateDecryptor())
+                using (ICryptoTransform transform = rijAlg.CreateDecryptor())
                 {
-                    using (var cryptoStream = new CryptoStream(inputStream, decryptor, CryptoStreamMode.Read))
+                    using (var cryptoStream = new CryptoStream(inputStream, transform, CryptoStreamMode.Read))
                     {
                         cryptoStream.CopyTo(outputStream);
                     }
                 }
+                
+                if (mode == CipherMode.CBC)
+                {
+                    // Manually remove pkcs7 padding!
+                    ValidateAndRemovePadding(outputStream);
+                }                
             }
+        }
+
+        private void ValidateAndRemovePadding(Stream outputStream)
+        {
+            if (outputStream.Length > 1)
+            {
+                outputStream.Position = outputStream.Length - 1;
+                var padLength = outputStream.ReadByte();
+                if (padLength > 0 && padLength <= 16)
+                {
+                    outputStream.Position = outputStream.Length - padLength;
+                    var padBytes = new byte[padLength];
+                    if (outputStream.Read(padBytes, 0, padLength) != padLength)
+                    {
+                        throw new CryptographicException("Failed to read padding.");
+                    }
+
+                    foreach (var b in padBytes)
+                    {
+                        if (b != padLength)
+                        {
+                            throw new CryptographicException("Padding is invalid.");
+                        }
+                    }
+
+                    outputStream.Position = outputStream.Length - padLength - 1;
+                    outputStream.SetLength(outputStream.Length - padLength);
+                }
+            }            
         }
     }
 }
