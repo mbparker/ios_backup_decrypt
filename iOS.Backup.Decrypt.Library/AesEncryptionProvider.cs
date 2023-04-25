@@ -52,19 +52,19 @@ namespace iOS.Backup.Decrypt.Library
             if (outputStream == null)
                 throw new ArgumentNullException(nameof(outputStream));
 
-            using (RijndaelManaged rijAlg = new RijndaelManaged())
+            using (Aes aes = Aes.Create())
             {
                 var m_IV = new byte[16];
 
-                rijAlg.Mode = mode;
-                rijAlg.KeySize = key.Length * 8;
-                rijAlg.Key = key;
-                rijAlg.BlockSize = m_IV.Length * 8;
-                rijAlg.IV = m_IV;
+                aes.Mode = mode;
+                aes.KeySize = key.Length * 8;
+                aes.Key = key;
+                aes.BlockSize = m_IV.Length * 8;
+                aes.IV = m_IV;
                 // Manually remove pkcs7 padding!
-                rijAlg.Padding = PaddingMode.None; 
+                aes.Padding = PaddingMode.None; 
 
-                using (ICryptoTransform transform = rijAlg.CreateDecryptor())
+                using (ICryptoTransform transform = aes.CreateDecryptor())
                 {
                     using (var cryptoStream = new CryptoStream(inputStream, transform, CryptoStreamMode.Read))
                     {
